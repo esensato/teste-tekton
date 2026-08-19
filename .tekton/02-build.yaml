@@ -6,7 +6,6 @@ spec:
   params:
     - name: IMAGE
       type: string
-      default: br.icr.io/meu-namespace/meu-app:latest
 
     - name: GIT_REPOSITORY
       type: string
@@ -20,9 +19,6 @@ spec:
 
   steps:
 
-    # ========================================================
-    # 1. Clone do GitHub
-    # ========================================================
     - name: git-clone
       image: alpine/git:2.45.2
       command:
@@ -34,18 +30,15 @@ spec:
         - "$(params.GIT_REPOSITORY)"
         - "$(workspaces.source.path)"
 
-    # ========================================================
-    # 2. Build + Push
-    # ========================================================
     - name: build-and-push
       image: gcr.io/kaniko-project/executor:v1.23.2
       command:
         - /kaniko/executor
       args:
-        - --dockerfile=$(workspaces.source.path)/Dockerfile
-        - --context=$(workspaces.source.path)
-        - --destination=$(params.IMAGE)
-        - --cache=true
+        - "--dockerfile=$(workspaces.source.path)/Dockerfile"
+        - "--context=$(workspaces.source.path)"
+        - "--destination=$(params.IMAGE)"
+        - "--cache=true"
 
 ---
 apiVersion: tekton.dev/v1
@@ -54,13 +47,13 @@ metadata:
   name: build-and-push
 spec:
   params:
-
     - name: IMAGE
       type: string
       default: br.icr.io/meu-namespace/meu-app:latest
 
     - name: GIT_REPOSITORY
       type: string
+      default: https://github.com/esensato/teste-tekton.git
 
     - name: GIT_REVISION
       type: string
@@ -70,13 +63,11 @@ spec:
     - name: source
 
   tasks:
-
     - name: build-and-push
       taskRef:
         name: build-and-push-icr
 
       params:
-
         - name: IMAGE
           value: "$(params.IMAGE)"
 
@@ -87,7 +78,6 @@ spec:
           value: "$(params.GIT_REVISION)"
 
       workspaces:
-
         - name: source
           workspace: source
 
@@ -98,15 +88,14 @@ metadata:
   name: build-and-push-binding
 spec:
   params:
-
     - name: IMAGE
-      value: br.icr.io/meu-namespace/meu-app:latest
+      value: "br.icr.io/meu-namespace/meu-app:latest"
 
     - name: GIT_REPOSITORY
-      value: https://github.com/minha-org/meu-app.git
+      value: "https://github.com/esensato/teste-tekton.git"
 
     - name: GIT_REVISION
-      value: main
+      value: "main"
 
 ---
 apiVersion: triggers.tekton.dev/v1beta1
@@ -115,9 +104,7 @@ metadata:
   name: build-and-push-template
 spec:
   params:
-
     - name: IMAGE
-      default: br.icr.io/meu-namespace/meu-app:latest
 
     - name: GIT_REPOSITORY
 
@@ -125,7 +112,6 @@ spec:
       default: main
 
   resourcetemplates:
-
     - apiVersion: tekton.dev/v1
       kind: PipelineRun
 
@@ -133,12 +119,10 @@ spec:
         generateName: build-and-push-
 
       spec:
-
         pipelineRef:
           name: build-and-push
 
         params:
-
           - name: IMAGE
             value: "$(tt.params.IMAGE)"
 
@@ -149,7 +133,6 @@ spec:
             value: "$(tt.params.GIT_REVISION)"
 
         workspaces:
-
           - name: source
             emptyDir: {}
 
@@ -160,7 +143,6 @@ metadata:
   name: listener-build-and-push
 spec:
   triggers:
-
     - name: trigger-build-and-push
 
       bindings:
