@@ -1,6 +1,3 @@
-# ============================================================
-# TASK
-# ============================================================
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
@@ -9,99 +6,126 @@ spec:
   params:
     - name: IMAGE
       type: string
-      description: Nome completo da imagem no IBM Container Registry
+      default: br.icr.io/meu-namespace/meu-app:latest
+
+    - name: GIT_REPOSITORY
+      type: string
+
+    - name: GIT_REVISION
+      type: string
+      default: main
 
   workspaces:
     - name: source
 
   steps:
+
+    # ========================================================
+    # 1. Clone do GitHub
+    # ========================================================
+    - name: git-clone
+      image: alpine/git:2.45.2
+      command:
+        - git
+      args:
+        - clone
+        - --branch
+        - "$(params.GIT_REVISION)"
+        - "$(params.GIT_REPOSITORY)"
+        - "$(workspaces.source.path)"
+
+    # ========================================================
+    # 2. Build + Push
+    # ========================================================
     - name: build-and-push
       image: gcr.io/kaniko-project/executor:v1.23.2
-      env:
-        - name: DOCKER_CONFIG
-          value: /tekton/home/.docker
-      script: |
-        #!/busybox/sh
-
-        set -e
-
-        echo "========================================"
-        echo "Build da imagem"
-        echo "========================================"
-
-        echo "Imagem:"
-        echo "$(params.IMAGE)"
-
-        echo "Contexto:"
-        echo "$(workspaces.source.path)"
-
-        echo "Dockerfile:"
-        echo "$(workspaces.source.path)/Dockerfile"
-
-        /kaniko/executor \
-          --dockerfile="$(workspaces.source.path)/Dockerfile" \
-          --context="$(workspaces.source.path)" \
-          --destination="$(params.IMAGE)" \
-          --cache=true
+      command:
+        - /kaniko/executor
+      args:
+        - --dockerfile=$(workspaces.source.path)/Dockerfile
+        - --context=$(workspaces.source.path)
+        - --destination=$(params.IMAGE)
+        - --cache=true
 
 ---
-# ============================================================
-# PIPELINE
-# ============================================================
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
   name: build-and-push
 spec:
   params:
+
     - name: IMAGE
       type: string
-      description: Imagem a ser publicada
       default: br.icr.io/meu-namespace/meu-app:latest
+
+    - name: GIT_REPOSITORY
+      type: string
+
+    - name: GIT_REVISION
+      type: string
+      default: main
 
   workspaces:
     - name: source
 
   tasks:
+
     - name: build-and-push
       taskRef:
         name: build-and-push-icr
 
       params:
+
         - name: IMAGE
           value: "$(params.IMAGE)"
 
+        - name: GIT_REPOSITORY
+          value: "$(params.GIT_REPOSITORY)"
+
+        - name: GIT_REVISION
+          value: "$(params.GIT_REVISION)"
+
       workspaces:
+
         - name: source
           workspace: source
 
 ---
-# ============================================================
-# TRIGGER BINDING
-# ============================================================
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerBinding
 metadata:
   name: build-and-push-binding
 spec:
   params:
+
     - name: IMAGE
-      value: "br.icr.io/meu-namespace/meu-app:latest"
+      value: br.icr.io/meu-namespace/meu-app:latest
+
+    - name: GIT_REPOSITORY
+      value: https://github.com/minha-org/meu-app.git
+
+    - name: GIT_REVISION
+      value: main
 
 ---
-# ============================================================
-# TRIGGER TEMPLATE
-# ============================================================
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerTemplate
 metadata:
   name: build-and-push-template
 spec:
   params:
+
     - name: IMAGE
       default: br.icr.io/meu-namespace/meu-app:latest
 
+    - name: GIT_REPOSITORY
+
+    - name: GIT_REVISION
+      default: main
+
   resourcetemplates:
+
     - apiVersion: tekton.dev/v1
       kind: PipelineRun
 
@@ -109,27 +133,34 @@ spec:
         generateName: build-and-push-
 
       spec:
+
         pipelineRef:
           name: build-and-push
 
         params:
+
           - name: IMAGE
             value: "$(tt.params.IMAGE)"
 
+          - name: GIT_REPOSITORY
+            value: "$(tt.params.GIT_REPOSITORY)"
+
+          - name: GIT_REVISION
+            value: "$(tt.params.GIT_REVISION)"
+
         workspaces:
+
           - name: source
             emptyDir: {}
 
 ---
-# ============================================================
-# EVENT LISTENER
-# ============================================================
 apiVersion: triggers.tekton.dev/v1beta1
 kind: EventListener
 metadata:
   name: listener-build-and-push
 spec:
   triggers:
+
     - name: trigger-build-and-push
 
       bindings:
