@@ -4,7 +4,7 @@ metadata:
   name: mensagem-boas-vindas
 spec:
   steps:
-    - name: mensagem
+    - name: exibir-mensagem
       image: alpine:3.20
       script: |
         #!/bin/sh
@@ -23,19 +23,18 @@ spec:
 
 ---
 apiVersion: triggers.tekton.dev/v1beta1
-kind: Trigger
+kind: TriggerTemplate
 metadata:
-  name: trigger-boas-vindas
+  name: template-boas-vindas
 spec:
-  bindings: []
-  template:
-    spec:
-      pipelineRun:
-        metadata:
-          generateName: pipeline-boas-vindas-run-
-        spec:
-          pipelineRef:
-            name: pipeline-boas-vindas
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: pipeline-boas-vindas-run-
+      spec:
+        pipelineRef:
+          name: pipeline-boas-vindas
 
 ---
 apiVersion: triggers.tekton.dev/v1beta1
@@ -44,4 +43,6 @@ metadata:
   name: listener-boas-vindas
 spec:
   triggers:
-    - triggerRef: trigger-boas-vindas
+    - name: trigger-boas-vindas
+      template:
+        ref: template-boas-vindas
