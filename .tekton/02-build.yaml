@@ -1,0 +1,81 @@
+# ============================================================
+# 1. PIPELINE
+# ============================================================
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: build-and-push
+spec:
+  params:
+    - name: image
+      type: string
+      description: Imagem completa a ser publicada no IBM Container Registry
+      default: br.icr.io/meu-namespace/meu-app:latest
+
+  tasks:
+    - name: build-and-push
+      taskRef:
+        name: icr-containerize
+
+      params:
+        - name: image
+          value: "$(params.image)"
+
+---
+# ============================================================
+# 2. TRIGGER BINDING
+# ============================================================
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: build-and-push-binding
+spec:
+  params:
+    - name: image
+      value: "br.icr.io/meu-namespace/meu-app:latest"
+
+---
+# ============================================================
+# 3. TRIGGER TEMPLATE
+# ============================================================
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: build-and-push-template
+spec:
+  params:
+    - name: image
+      default: br.icr.io/meu-namespace/meu-app:latest
+
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+
+      metadata:
+        generateName: build-and-push-
+
+      spec:
+        pipelineRef:
+          name: build-and-push
+
+        params:
+          - name: image
+            value: "$(tt.params.image)"
+
+---
+# ============================================================
+# 4. EVENT LISTENER
+# ============================================================
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: listener-build-and-push
+spec:
+  triggers:
+    - name: trigger-build-and-push
+
+      bindings:
+        - ref: build-and-push-binding
+
+      template:
+        ref: build-and-push-template
