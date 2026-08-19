@@ -1,5 +1,52 @@
 # ============================================================
-# 1. PIPELINE
+# TASK
+# ============================================================
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: build-and-push-icr
+spec:
+  params:
+    - name: IMAGE
+      type: string
+      description: Nome completo da imagem no IBM Container Registry
+
+  workspaces:
+    - name: source
+
+  steps:
+    - name: build-and-push
+      image: gcr.io/kaniko-project/executor:v1.23.2
+      env:
+        - name: DOCKER_CONFIG
+          value: /tekton/home/.docker
+      script: |
+        #!/busybox/sh
+
+        set -e
+
+        echo "========================================"
+        echo "Build da imagem"
+        echo "========================================"
+
+        echo "Imagem:"
+        echo "$(params.IMAGE)"
+
+        echo "Contexto:"
+        echo "$(workspaces.source.path)"
+
+        echo "Dockerfile:"
+        echo "$(workspaces.source.path)/Dockerfile"
+
+        /kaniko/executor \
+          --dockerfile="$(workspaces.source.path)/Dockerfile" \
+          --context="$(workspaces.source.path)" \
+          --destination="$(params.IMAGE)" \
+          --cache=true
+
+---
+# ============================================================
+# PIPELINE
 # ============================================================
 apiVersion: tekton.dev/v1
 kind: Pipeline
@@ -7,23 +54,30 @@ metadata:
   name: build-and-push
 spec:
   params:
-    - name: image
+    - name: IMAGE
       type: string
-      description: Imagem completa a ser publicada no IBM Container Registry
+      description: Imagem a ser publicada
       default: br.icr.io/meu-namespace/meu-app:latest
+
+  workspaces:
+    - name: source
 
   tasks:
     - name: build-and-push
       taskRef:
-        name: icr-containerize
+        name: build-and-push-icr
 
       params:
-        - name: image
-          value: "$(params.image)"
+        - name: IMAGE
+          value: "$(params.IMAGE)"
+
+      workspaces:
+        - name: source
+          workspace: source
 
 ---
 # ============================================================
-# 2. TRIGGER BINDING
+# TRIGGER BINDING
 # ============================================================
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerBinding
@@ -31,12 +85,12 @@ metadata:
   name: build-and-push-binding
 spec:
   params:
-    - name: image
+    - name: IMAGE
       value: "br.icr.io/meu-namespace/meu-app:latest"
 
 ---
 # ============================================================
-# 3. TRIGGER TEMPLATE
+# TRIGGER TEMPLATE
 # ============================================================
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerTemplate
@@ -44,7 +98,7 @@ metadata:
   name: build-and-push-template
 spec:
   params:
-    - name: image
+    - name: IMAGE
       default: br.icr.io/meu-namespace/meu-app:latest
 
   resourcetemplates:
@@ -59,12 +113,16 @@ spec:
           name: build-and-push
 
         params:
-          - name: image
-            value: "$(tt.params.image)"
+          - name: IMAGE
+            value: "$(tt.params.IMAGE)"
+
+        workspaces:
+          - name: source
+            emptyDir: {}
 
 ---
 # ============================================================
-# 4. EVENT LISTENER
+# EVENT LISTENER
 # ============================================================
 apiVersion: triggers.tekton.dev/v1beta1
 kind: EventListener
