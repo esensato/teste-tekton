@@ -4,7 +4,7 @@ metadata:
   name: mensagem-boas-vindas
 spec:
   steps:
-    - name: exibir-mensagem
+    - name: mensagem
       image: alpine:3.20
       script: |
         #!/bin/sh
@@ -23,10 +23,23 @@ spec:
 
 ---
 apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: binding-boas-vindas
+spec:
+  params:
+    - name: mensagem
+      value: "Bem vindo ao tekton"
+
+---
+apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerTemplate
 metadata:
   name: template-boas-vindas
 spec:
+  params:
+    - name: mensagem
+      default: "Bem vindo ao tekton"
   resourcetemplates:
     - apiVersion: tekton.dev/v1
       kind: PipelineRun
@@ -44,5 +57,7 @@ metadata:
 spec:
   triggers:
     - name: trigger-boas-vindas
+      bindings:
+        - ref: binding-boas-vindas
       template:
         ref: template-boas-vindas
