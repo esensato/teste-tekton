@@ -162,7 +162,7 @@ spec:
     # ========================================================
     - name: IMAGE
       type: string
-      default: br.icr.io/SEU_NAMESPACE_ICR/teste-tekton:latest
+      default: br.icr.io/meu-namespace/teste-tekton:latest
 
     # ========================================================
     # GITHUB
@@ -234,7 +234,7 @@ spec:
     # ICR
     # ========================================================
     - name: IMAGE
-      value: "br.icr.io/SEU_NAMESPACE_ICR/teste-tekton:latest"
+      value: "br.icr.io/meu-namespace/teste-tekton:latest"
 
     # ========================================================
     # GITHUB
@@ -254,7 +254,7 @@ spec:
     # SOMENTE PARA DEMO
     # ========================================================
     - name: IBM_CLOUD_API_KEY
-      value: "SUA_API_KEY_IBM_CLOUD"
+      value: "X1xpLryUW5d6NjVE8ceLVY_621l1MpPCXc4XeyHXGHjH"
 
 
 ---
