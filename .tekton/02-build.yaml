@@ -8,27 +8,16 @@ metadata:
 spec:
   params:
 
-    # Imagem final no IBM Container Registry
     - name: IMAGE
       type: string
 
-    # Repositório GitHub público
     - name: GIT_REPOSITORY
       type: string
 
-    # Branch
     - name: GIT_REVISION
       type: string
       default: main
 
-    # IBM Cloud API Key
-    #
-    # ATENÇÃO:
-    # Esta API Key está sendo passada diretamente como parâmetro
-    # apenas para esta DEMO.
-    #
-    # NÃO utilizar dessa forma em produção.
-    #
     - name: IBM_CLOUD_API_KEY
       type: string
 
@@ -37,23 +26,15 @@ spec:
 
   volumes:
 
-    # Volume compartilhado entre os steps.
-    #
-    # O step configure-registry cria:
-    #
-    # /workspace/kaniko/.docker/config.json
-    #
-    # O step build-and-push monta esse mesmo conteúdo em:
-    #
-    # /kaniko/.docker
-    #
+    # Volume compartilhado entre configure-registry
+    # e build-and-push
     - name: kaniko-config
       emptyDir: {}
 
   steps:
 
     # ========================================================
-    # STEP 1 - CLONE DO GITHUB
+    # 1. Clone do GitHub público
     # ========================================================
     - name: git-clone
       image: alpine/git:2.45.2
@@ -63,19 +44,23 @@ spec:
 
       args:
         - clone
-
         - --branch
         - "$(params.GIT_REVISION)"
-
         - "$(params.GIT_REPOSITORY)"
-
         - "$(workspaces.source.path)"
 
     # ========================================================
-    # STEP 2 - CONFIGURA AUTENTICAÇÃO DO ICR
+    # 2. Configuração do ICR
     # ========================================================
     - name: configure-registry
       image: alpine:3.20
+
+      volumeMounts:
+
+        # IMPORTANTE:
+        # O mesmo volume usado pelo Kaniko.
+        - name: kaniko-config
+          mountPath: /kaniko/.docker
 
       command:
         - /bin/sh
@@ -89,19 +74,14 @@ spec:
           echo "Configurando autenticação do IBM ICR"
           echo "========================================"
 
-          mkdir -p /workspace/kaniko/.docker
+          mkdir -p /kaniko/.docker
 
-          # IBM Container Registry usa:
-          #
-          # username = iamapikey
-          # password = IBM Cloud API Key
-          #
           AUTH=$(printf 'iamapikey:%s' \
             "$(params.IBM_CLOUD_API_KEY)" \
             | base64 \
             | tr -d '\n')
 
-          cat > /workspace/kaniko/.docker/config.json <<EOF
+          cat > /kaniko/.docker/config.json <<EOF
           {
             "auths": {
               "br.icr.io": {
@@ -113,14 +93,18 @@ spec:
 
           echo "Configuração do ICR criada."
 
+          echo "Verificando arquivo:"
+          ls -la /kaniko/.docker
+
     # ========================================================
-    # STEP 3 - BUILD + PUSH
+    # 3. Build + Push
     # ========================================================
     - name: build-and-push
       image: gcr.io/kaniko-project/executor:v1.23.2
 
       volumeMounts:
 
+        # EXATAMENTE o mesmo volume
         - name: kaniko-config
           mountPath: /kaniko/.docker
 
@@ -129,22 +113,17 @@ spec:
 
       args:
 
-        # Dockerfile está em:
-        #
-        # .tekton/Dockerfile
-        #
+        # Dockerfile do seu repositório
         - "--dockerfile=/workspace/source/.tekton/Dockerfile"
 
-        # Contexto = raiz do repositório
+        # Contexto do build
         - "--context=/workspace/source"
 
-        # Imagem final
+        # Imagem destino
         - "--destination=$(params.IMAGE)"
 
         # Cache
         - "--cache=true"
-
-
 ---
 # ============================================================
 # PIPELINE
