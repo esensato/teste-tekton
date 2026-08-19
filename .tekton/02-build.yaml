@@ -1,92 +1,205 @@
+# ============================================================
+# TASK
+# ============================================================
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
   name: build-and-push-icr
 spec:
   params:
+
+    # Imagem final no IBM Container Registry
     - name: IMAGE
       type: string
 
+    # Repositório GitHub público
     - name: GIT_REPOSITORY
       type: string
 
+    # Branch
     - name: GIT_REVISION
       type: string
       default: main
 
+    # IBM Cloud API Key
+    #
+    # ATENÇÃO:
+    # Esta API Key está sendo passada diretamente como parâmetro
+    # apenas para esta DEMO.
+    #
+    # NÃO utilizar dessa forma em produção.
+    #
+    - name: IBM_CLOUD_API_KEY
+      type: string
+
   workspaces:
     - name: source
 
+  volumes:
+
+    # Volume compartilhado entre os steps.
+    #
+    # O step configure-registry cria:
+    #
+    # /workspace/kaniko/.docker/config.json
+    #
+    # O step build-and-push monta esse mesmo conteúdo em:
+    #
+    # /kaniko/.docker
+    #
+    - name: kaniko-config
+      emptyDir: {}
+
   steps:
 
+    # ========================================================
+    # STEP 1 - CLONE DO GITHUB
+    # ========================================================
     - name: git-clone
       image: alpine/git:2.45.2
+
       command:
         - git
+
       args:
         - clone
+
         - --branch
         - "$(params.GIT_REVISION)"
+
         - "$(params.GIT_REPOSITORY)"
+
         - "$(workspaces.source.path)"
 
-    - name: debug
+    # ========================================================
+    # STEP 2 - CONFIGURA AUTENTICAÇÃO DO ICR
+    # ========================================================
+    - name: configure-registry
       image: alpine:3.20
+
       command:
         - /bin/sh
+
       args:
         - -c
         - |
-          echo "================================="
-          echo "Workspace:"
-          echo "================================="
+          set -eu
 
-          find "$(workspaces.source.path)" -maxdepth 3 -type f -print
+          echo "========================================"
+          echo "Configurando autenticação do IBM ICR"
+          echo "========================================"
 
-          echo ""
-          echo "================================="
-          echo "Root:"
-          echo "================================="
+          mkdir -p /workspace/kaniko/.docker
 
-          ls -la "$(workspaces.source.path)"
+          # IBM Container Registry usa:
+          #
+          # username = iamapikey
+          # password = IBM Cloud API Key
+          #
+          AUTH=$(printf 'iamapikey:%s' \
+            "$(params.IBM_CLOUD_API_KEY)" \
+            | base64 \
+            | tr -d '\n')
+
+          cat > /workspace/kaniko/.docker/config.json <<EOF
+          {
+            "auths": {
+              "br.icr.io": {
+                "auth": "${AUTH}"
+              }
+            }
+          }
+          EOF
+
+          echo "Configuração do ICR criada."
+
+    # ========================================================
+    # STEP 3 - BUILD + PUSH
+    # ========================================================
     - name: build-and-push
       image: gcr.io/kaniko-project/executor:v1.23.2
+
+      volumeMounts:
+
+        - name: kaniko-config
+          mountPath: /kaniko/.docker
+
       command:
         - /kaniko/executor
+
       args:
+
+        # Dockerfile está em:
+        #
+        # .tekton/Dockerfile
+        #
         - "--dockerfile=/workspace/source/.tekton/Dockerfile"
-        - "--context=$(workspaces.source.path)"
+
+        # Contexto = raiz do repositório
+        - "--context=/workspace/source"
+
+        # Imagem final
         - "--destination=$(params.IMAGE)"
+
+        # Cache
         - "--cache=true"
 
+
 ---
+# ============================================================
+# PIPELINE
+# ============================================================
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
   name: build-and-push
 spec:
+
   params:
+
+    # ========================================================
+    # IMAGEM
+    # ========================================================
     - name: IMAGE
       type: string
-      default: br.icr.io/meu-namespace/meu-app:latest
+      default: br.icr.io/SEU_NAMESPACE_ICR/teste-tekton:latest
 
+    # ========================================================
+    # GITHUB
+    # ========================================================
     - name: GIT_REPOSITORY
       type: string
       default: https://github.com/esensato/teste-tekton.git
 
+    # ========================================================
+    # BRANCH
+    # ========================================================
     - name: GIT_REVISION
       type: string
       default: main
 
+    # ========================================================
+    # IBM CLOUD API KEY
+    # ========================================================
+    - name: IBM_CLOUD_API_KEY
+      type: string
+
   workspaces:
+
     - name: source
 
   tasks:
+
+    # ========================================================
+    # ÚNICA TASK DO PIPELINE
+    # ========================================================
     - name: build-and-push
+
       taskRef:
         name: build-and-push-icr
 
       params:
+
         - name: IMAGE
           value: "$(params.IMAGE)"
 
@@ -96,41 +209,92 @@ spec:
         - name: GIT_REVISION
           value: "$(params.GIT_REVISION)"
 
+        - name: IBM_CLOUD_API_KEY
+          value: "$(params.IBM_CLOUD_API_KEY)"
+
       workspaces:
+
         - name: source
           workspace: source
 
+
 ---
+# ============================================================
+# TRIGGER BINDING
+# ============================================================
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerBinding
 metadata:
   name: build-and-push-binding
 spec:
-  params:
-    - name: IMAGE
-      value: "br.icr.io/meu-namespace/meu-app:latest"
 
+  params:
+
+    # ========================================================
+    # ICR
+    # ========================================================
+    - name: IMAGE
+      value: "br.icr.io/SEU_NAMESPACE_ICR/teste-tekton:latest"
+
+    # ========================================================
+    # GITHUB
+    # ========================================================
     - name: GIT_REPOSITORY
       value: "https://github.com/esensato/teste-tekton.git"
 
+    # ========================================================
+    # BRANCH
+    # ========================================================
     - name: GIT_REVISION
       value: "main"
 
+    # ========================================================
+    # IBM CLOUD API KEY
+    #
+    # SOMENTE PARA DEMO
+    # ========================================================
+    - name: IBM_CLOUD_API_KEY
+      value: "SUA_API_KEY_IBM_CLOUD"
+
+
 ---
+# ============================================================
+# TRIGGER TEMPLATE
+# ============================================================
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerTemplate
 metadata:
   name: build-and-push-template
 spec:
+
   params:
+
+    # ========================================================
+    # IMAGEM
+    # ========================================================
     - name: IMAGE
 
+    # ========================================================
+    # GITHUB
+    # ========================================================
     - name: GIT_REPOSITORY
 
+    # ========================================================
+    # BRANCH
+    # ========================================================
     - name: GIT_REVISION
       default: main
 
+    # ========================================================
+    # IBM CLOUD API KEY
+    # ========================================================
+    - name: IBM_CLOUD_API_KEY
+
   resourcetemplates:
+
+    # ========================================================
+    # PIPELINE RUN
+    # ========================================================
     - apiVersion: tekton.dev/v1
       kind: PipelineRun
 
@@ -138,10 +302,18 @@ spec:
         generateName: build-and-push-
 
       spec:
+
+        # ====================================================
+        # PIPELINE
+        # ====================================================
         pipelineRef:
           name: build-and-push
 
+        # ====================================================
+        # PARÂMETROS
+        # ====================================================
         params:
+
           - name: IMAGE
             value: "$(tt.params.IMAGE)"
 
@@ -151,21 +323,42 @@ spec:
           - name: GIT_REVISION
             value: "$(tt.params.GIT_REVISION)"
 
+          - name: IBM_CLOUD_API_KEY
+            value: "$(tt.params.IBM_CLOUD_API_KEY)"
+
+        # ====================================================
+        # WORKSPACE
+        # ====================================================
         workspaces:
+
           - name: source
             emptyDir: {}
 
+
 ---
+# ============================================================
+# EVENT LISTENER
+# ============================================================
 apiVersion: triggers.tekton.dev/v1beta1
 kind: EventListener
 metadata:
   name: listener-build-and-push
 spec:
+
   triggers:
+
     - name: trigger-build-and-push
 
+      # ======================================================
+      # TRIGGER BINDING
+      # ======================================================
       bindings:
+
         - ref: build-and-push-binding
 
+      # ======================================================
+      # TRIGGER TEMPLATE
+      # ======================================================
       template:
+
         ref: build-and-push-template
