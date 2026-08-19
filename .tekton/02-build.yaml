@@ -54,7 +54,7 @@ spec:
       command:
         - /kaniko/executor
       args:
-        - "--dockerfile=/workspace/source/Dockerfile"
+        - "--dockerfile=/workspace/source/.tekton/Dockerfile"
         - "--context=$(workspaces.source.path)"
         - "--destination=$(params.IMAGE)"
         - "--cache=true"
