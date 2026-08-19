@@ -30,12 +30,31 @@ spec:
         - "$(params.GIT_REPOSITORY)"
         - "$(workspaces.source.path)"
 
+    - name: debug
+      image: alpine:3.20
+      command:
+        - /bin/sh
+      args:
+        - -c
+        - |
+          echo "================================="
+          echo "Workspace:"
+          echo "================================="
+
+          find "$(workspaces.source.path)" -maxdepth 3 -type f -print
+
+          echo ""
+          echo "================================="
+          echo "Root:"
+          echo "================================="
+
+          ls -la "$(workspaces.source.path)"
     - name: build-and-push
       image: gcr.io/kaniko-project/executor:v1.23.2
       command:
         - /kaniko/executor
       args:
-        - "--dockerfile=$(workspaces.source.path)/Dockerfile"
+        - "--dockerfile=/workspace/source/Dockerfile"
         - "--context=$(workspaces.source.path)"
         - "--destination=$(params.IMAGE)"
         - "--cache=true"
