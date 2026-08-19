@@ -1,0 +1,22 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: mensagem-boas-vindas
+spec:
+  steps:
+    - name: exibir-mensagem
+      image: alpine:3.20
+      script: |
+        #!/bin/sh
+        echo "Bem vindo ao tekton"
+
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: pipeline-boas-vindas
+spec:
+  tasks:
+    - name: boas-vindas
+      taskRef:
+        name: mensagem-boas-vindas
